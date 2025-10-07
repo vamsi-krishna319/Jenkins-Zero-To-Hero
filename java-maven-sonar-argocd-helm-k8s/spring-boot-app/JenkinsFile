@@ -1,10 +1,5 @@
 pipeline {
-    agent {
-        docker {
-            image 'maven:3.9.4-eclipse-temurin-17'
-            args '--user root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint=""' // Mount Docker socket for host Docker
-        }
-    }
+    agent any
 
     environment {
         DOCKER_IMAGE_PREFIX = "vamsikrishna319/ultimate-cicd"
@@ -36,11 +31,11 @@ pipeline {
                 script {
                     def imageTag = "${DOCKER_IMAGE_PREFIX}:${BUILD_NUMBER}"
                     dir('java-maven-sonar-argocd-helm-k8s/spring-boot-app') {
-                        sh "docker build -t ${imageTag} ."
-                    }
-                    def dockerImage = docker.image(imageTag)
-                    docker.withRegistry('https://index.docker.io/v1/', 'docker-cred') {
-                        dockerImage.push()
+                        sh """
+                            docker build -t ${imageTag} .
+                            echo $REGISTRY_CREDENTIALS_PSW | docker login -u $REGISTRY_CREDENTIALS_USR --password-stdin
+                            docker push ${imageTag}
+                        """
                     }
                 }
             }
@@ -52,7 +47,6 @@ pipeline {
                     sh '''
                         git config user.email "pvkreddy2003.com"
                         git config user.name "${GIT_USER_NAME}"
-                        BUILD_NUMBER=${BUILD_NUMBER}
                         sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
                         git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
                         git commit -m "Update deployment image to version ${BUILD_NUMBER}" || echo "No changes to commit"
